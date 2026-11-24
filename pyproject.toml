@@ -16,7 +16,7 @@ bayes = ["scikit-learn"]
 root = ["uproot"]
 parquet = ["pyarrow"]
 dev = ["pytest"]
-all = ["matplotlib", "scikit-learn", "uproot", "pyarrow", "pytest"]
+all = ["matplotlib", "scikit-learn", "uproot", "pytest"]
 
 [project.scripts]
 laropt = "laropt.cli:main"

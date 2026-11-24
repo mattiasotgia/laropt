@@ -1,0 +1,122 @@
+# laropt study file — everything below is looked up by name in the component registries.
+# Relative paths are resolved against the directory of this file.
+study:
+  name: hit_tuning
+  workdir: out/hit_tuning
+  seed: 42
+
+template: templates/hitfinder_template.fcl      # ANY FHiCL; laropt appends `path: value` overrides
+
+# constants appended to every generated FHiCL (strings are quoted; prefix with raw: to avoid that)
+overrides:
+  services.TFileService.fileName: "raw:\"hist.root\""
+
+input:
+  files: inputs/files.list          # a .root file, a list file, a glob, or a YAML list
+  batch_size: 10                    # input files per `lar` call (omit = one call)
+
+lar:
+  executable: lar
+  n_events: -1
+  output: true                      # pass -o <file> (set false for analyzer-only FHiCLs)
+  keep_output: false                # delete the art/ROOT output after scoring
+
+# ---------------------------------------------------------------------------------------------
+# What to tune. Optimizers work in the unit cube; this section maps it to FHiCL.
+#   paths        FHiCL dotted paths receiving the value
+#   expand       {name: [values]} -> every path is written once per value of {name}
+#   size         vector length;  per_element: true writes element i to the path containing {i}
+#   tied: true   one search dimension shared by all elements (the behaviour of the old script)
+# ---------------------------------------------------------------------------------------------
+parameters:
+  roiThreshold:
+    bounds: [3, 7]
+    size: 3
+    per_element: true
+    expand: {producer: [gaushit2dTPCEE, gaushit2dTPCEW, gaushit2dTPCWE, gaushit2dTPCWW]}
+    paths: ["physics.producers.{producer}.HitFinderToolVec.CandidateHitsPlane{i}.RoiThreshold"]
+  nextADCThreshold:
+    bounds: [-0.3, 0.0]
+    size: 3
+    per_element: true
+    expand: {producer: [gaushit2dTPCEE, gaushit2dTPCEW, gaushit2dTPCWE, gaushit2dTPCWW]}
+    paths: ["physics.producers.{producer}.HitFinderToolVec.CandidateHitsPlane{i}.NextADCThreshold"]
+  maxMultiHit:
+    type: int
+    bounds: [5, 10]
+    expand: {producer: [gaushit2dTPCEE, gaushit2dTPCEW, gaushit2dTPCWE, gaushit2dTPCWW]}
+    paths: ["physics.producers.{producer}.MaxMultiHit"]
+  chi2NDF:
+    bounds: [200, 2500]
+    expand: {producer: [gaushit2dTPCEE, gaushit2dTPCEW, gaushit2dTPCWE, gaushit2dTPCWW]}
+    paths: ["physics.producers.{producer}.Chi2NDF"]
+  longMaxHits:
+    type: int
+    bounds: [5, 15]
+    size: 3
+    expand: {producer: [gaushit2dTPCEE, gaushit2dTPCEW, gaushit2dTPCWE, gaushit2dTPCWW]}
+    paths: ["physics.producers.{producer}.LongMaxHits"]     # whole vector [a, b, c]
+  longPulseWidth:
+    type: int
+    bounds: [8, 18]
+    size: 3
+    expand: {producer: [gaushit2dTPCEE, gaushit2dTPCEW, gaushit2dTPCWE, gaushit2dTPCWW]}
+    paths: ["physics.producers.{producer}.LongPulseWidth"]
+
+# ---------------------------------------------------------------------------------------------
+# How to score one point: `lar` output -> table with one row per event.
+# ---------------------------------------------------------------------------------------------
+metric:
+  name: root_macro                  # or: fcl_analyzer | python  (laropt list)
+  macro: macros/hitScorer.C
+  function: hitScorer               # called as hitScorer(lar_output, hist_file)
+  columns: [event, subRun, run, hitEnergy, ideEnergy, eventRatio,
+            plane0Ratio, plane1Ratio, plane2Ratio, plane0Chi2NDF, plane1Chi2NDF, plane2Chi2NDF]
+# metric:                           # alternative: an analyzer run from FHiCL
+#   name: fcl_analyzer
+#   fcl: fcl/hitScorerAnalyzer.fcl
+#   output: metrics_b{batch}.root   # written through TFileService (-T)
+#   tree: hitscorer/events
+#   overrides: {physics.analyzers.hitscorer.input_label: "gaushit"}
+
+# One number per point (evaluated on that point's events). `df`, `np`, `pd`, `params` and every
+# column name are available.
+objective:
+  name: expression
+  expr: "((plane0Ratio - 1)**2 + (plane1Ratio - 1)**2 + (plane2Ratio - 1)**2).mean()"
+  direction: minimize
+
+summaries:                          # extra columns stored next to the objective
+  meanRatio: "df.eventRatio.mean()"
+  stdRatio: "df.eventRatio.std()"
+
+# ---------------------------------------------------------------------------------------------
+# Search strategy and where jobs run.
+# ---------------------------------------------------------------------------------------------
+optimizer:
+  name: lhs                         # lhs | sobol | halton | random | grid | pso | bayes
+  n_samples: 200
+# optimizer: {name: pso, n_particles: 20, n_iterations: 10}
+# optimizer: {name: bayes, n_initial: 20, n_iterations: 10, batch_size: 5}
+
+executor:
+  name: local
+  workers: 4
+# executor:
+#   name: grid
+#   submit: "sbatch --array=0-{n_last} {script}"   # or condor_submit / jobsub_submit ...
+#   header: "#SBATCH --time=02:00:00"
+#   setup: "source /path/to/setup_larsoft.sh"
+#   command: "laropt run-point -c {config} -p {point_id}"
+#   wait: true
+#   poll_interval: 60
+
+writer:
+  name: sqlite                      # sqlite | csv | pickle | parquet
+
+plots:
+  - {name: convergence, output: convergence.png}
+  - {name: slices, output: slices.png}
+  - {name: correlation, output: correlation.png}
+
+plugins: []                         # modules / .py files registering your own components

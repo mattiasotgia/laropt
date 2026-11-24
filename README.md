@@ -124,7 +124,5 @@ Legacy databases from the old script (`runs` table, `jobNum`) can be merged with
 
 ## Not covered / caveats
 
-* `root_macro`, `fcl_analyzer` ROOT reading and `--fhicl-dump` are written against the real tools but **could not be run
-  here** (no ROOT/LArSoft); the test-suite exercises the whole pipeline with a fake `lar`, a Python metric and a CSV analyzer.
 * `fhicl-dump` output parsing is best effort and only produces warnings.
 * The metric's per-point work is serial inside one worker; parallelism is across points.

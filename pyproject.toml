@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "laropt"
+version = "0.1.0"
+description = "Tune / optimise any FHiCL configuration of a LArSoft job against a user-defined metric"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = ["numpy", "pandas", "scipy", "pyyaml", "click"]
+
+[project.optional-dependencies]
+plot = ["matplotlib"]
+bayes = ["scikit-learn"]
+root = ["uproot"]
+parquet = ["pyarrow"]
+dev = ["pytest"]
+all = ["matplotlib", "scikit-learn", "uproot", "pyarrow", "pytest"]
+
+[project.scripts]
+laropt = "laropt.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+laropt = ["data/*.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
